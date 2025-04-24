@@ -356,21 +356,21 @@ export default function Home() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center bg-black text-white p-8 min-h-screen">
-      <h1 className="text-3xl font-bold mb-6">Honey Snap 📸</h1>
+    <div className="flex flex-col items-center justify-center bg-black text-white p-4 sm:p-8 min-h-screen">
+      <h1 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-6 text-center">Honey Snap 📸</h1>
       <video
         ref={videoRef}
         autoPlay
         playsInline
-        className={`w-full max-w-md rounded-xl shadow-lg transform ${isFlipped ? 'scale-x-[-1]' : ''}`}
+        className={`w-full max-w-sm sm:max-w-md rounded-xl shadow-lg transform ${isFlipped ? 'scale-x-[-1]' : ''}`}
         style={{ filter: previewFilter === 'none' ? 'none' : previewFilter }}
       />
-      
-      <div className="mt-4 mb-2">
+  
+      <div className="mt-4 mb-2 text-center">
         <h3 className="text-lg font-medium">Preview Filter</h3>
       </div>
-      
-      <div className="grid grid-cols-3 gap-4 mb-6">
+  
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
         {[
           'none',
           'grayscale(50%)',
@@ -382,7 +382,7 @@ export default function Home() {
           <div
             key={i}
             onClick={() => setPreviewFilter(filter)}
-            className={`w-24 h-16 rounded shadow cursor-pointer border-2 overflow-hidden relative ${
+            className={`w-20 h-14 sm:w-24 sm:h-16 rounded shadow cursor-pointer border-2 overflow-hidden relative ${
               previewFilter === filter ? 'border-pink-500' : 'border-transparent'
             }`}
           >
@@ -398,52 +398,52 @@ export default function Home() {
           </div>
         ))}
       </div>
-      
-      <div className="flex flex-row gap-4 p-4">
+  
+      <div className="flex flex-wrap justify-center gap-4 p-4">
         <button
           onClick={takePhoto}
-          className="px-6 py-2 bg-pink-600 rounded hover:bg-pink-500 transition"
+          className="px-4 sm:px-6 py-2 bg-pink-600 rounded hover:bg-pink-500 transition"
         >
           Take Photo
         </button>
         <button
           onClick={flipCamera}
-          className="px-6 py-2 bg-blue-600 rounded hover:bg-blue-500 transition"
+          className="px-4 sm:px-6 py-2 bg-blue-600 rounded hover:bg-blue-500 transition"
         >
           Flip Camera
         </button>
         {isRecording ? (
           <button
             onClick={stopRecording}
-            className="px-6 py-2 bg-red-600 rounded hover:bg-red-500 transition animate-pulse"
+            className="px-4 sm:px-6 py-2 bg-red-600 rounded hover:bg-red-500 transition animate-pulse"
           >
             Stop Recording
           </button>
         ) : (
           <button
             onClick={startRecording}
-            className="px-6 py-2 bg-green-600 rounded hover:bg-green-500 transition"
+            className="px-4 sm:px-6 py-2 bg-green-600 rounded hover:bg-green-500 transition"
           >
             Start Recording
           </button>
         )}
       </div>
-      
+  
       <canvas ref={canvasRef} className="hidden" />
-      
+  
       {photo && (
-        <div className="mt-6 w-full max-w-md">
-          <h2 className="text-xl mb-2">Your Photo:</h2>
+        <div className="mt-6 w-full max-w-sm sm:max-w-md">
+          <h2 className="text-lg sm:text-xl mb-2 text-center">Your Photo:</h2>
           <img
             src={photo}
             alt="Captured"
-            className="rounded shadow-lg w-full"
+            className="rounded shadow-lg w-full h-auto"
             style={{ filter: photoFilter === 'none' ? 'none' : photoFilter }}
           />
-          
+  
           <div className="mt-4">
-            <h3 className="text-lg font-medium mb-2">Apply Filter to Photo</h3>
-            <div className="grid grid-cols-3 gap-4 mb-4">
+            <h3 className="text-lg font-medium mb-2 text-center">Apply Filter to Photo</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
               {[
                 'none',
                 'grayscale(50%)',
@@ -464,8 +464,8 @@ export default function Home() {
               ))}
             </div>
           </div>
-          
-          <div className="mt-4 flex justify-center gap-4">
+  
+          <div className="mt-4 flex flex-wrap justify-center gap-4">
             <a
               href={photo}
               download="honey-snap-photo.png"
@@ -482,14 +482,14 @@ export default function Home() {
           </div>
         </div>
       )}
-      
+  
       {recordedVideo && (
-        <div className="mt-6 w-full max-w-md">
-          <h2 className="text-xl mb-2">Your Video:</h2>
+        <div className="mt-6 w-full max-w-sm sm:max-w-md">
+          <h2 className="text-lg sm:text-xl mb-2 text-center">Your Video:</h2>
           <video
             src={recordedVideo}
             controls
-            className="rounded shadow-lg w-full"
+            className="rounded shadow-lg w-full h-auto"
           />
           <div className="mt-2 flex justify-center">
             <a
@@ -503,5 +503,5 @@ export default function Home() {
         </div>
       )}
     </div>
-  );
+  );  
 }
