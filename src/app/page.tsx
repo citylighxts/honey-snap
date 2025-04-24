@@ -1,103 +1,507 @@
-import Image from "next/image";
+'use client';
+
+import React, { useRef, useState, useEffect } from 'react';
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [isFlipped, setIsFlipped] = useState(true);
+  const [previewFilter, setPreviewFilter] = useState('none'); // Filter for live preview
+  const [photoFilter, setPhotoFilter] = useState('none'); // Filter for captured photo
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordedVideo, setRecordedVideo] = useState<string | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const previewCanvasRefs = useRef<(HTMLCanvasElement | null)[]>([null, null, null, null, null, null]);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+  const getVideo = async () => {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.error('getUserMedia is not supported in this browser.');
+        return;
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+      });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      console.error('Error accessing webcam:', err);
+    }
+  };
+
+  const stopVideo = () => {
+    if (videoRef.current?.srcObject) {
+      const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
+      tracks.forEach((track) => track.stop());
+    }
+  };
+
+  useEffect(() => {
+    getVideo();
+
+    // Set up preview canvases
+    const updatePreviewCanvases = () => {
+      if (!videoRef.current || !videoRef.current.videoWidth) return;
+      
+      const filters = [
+        'none',
+        'grayscale(50%)',
+        'sepia(100%)',
+        'saturate(150%) hue-rotate(10deg)',
+        'saturate(200%)',
+        'brightness(150%)',
+      ];
+      
+      filters.forEach((filter, i) => {
+        const canvas = previewCanvasRefs.current[i];
+        if (canvas && videoRef.current) {
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            canvas.width = 150;
+            canvas.height = 100;
+            
+            // Apply flipping if needed
+            if (isFlipped) {
+              ctx.translate(canvas.width, 0);
+              ctx.scale(-1, 1);
+            }
+            
+            // Draw video frame
+            ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+            
+            // Reset transformation
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            
+            // Apply filter to the drawn image
+            if (filter !== 'none') {
+              ctx.filter = filter;
+              ctx.drawImage(canvas, 0, 0);
+              ctx.filter = 'none';
+            }
+          }
+        }
+      });
+      
+      if (videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
+        requestAnimationFrame(updatePreviewCanvases);
+      }
+    };
+    
+    const previewInterval = setInterval(() => {
+      if (videoRef.current?.readyState === 4) {
+        updatePreviewCanvases();
+        clearInterval(previewInterval);
+      }
+    }, 100);
+
+    return () => {
+      stopVideo();
+      clearInterval(previewInterval);
+    };
+  }, [isFlipped]);
+
+  // Update the preview canvases when the video stream is ready
+  useEffect(() => {
+    const video = videoRef.current;
+    
+    if (video) {
+      const updateCanvases = () => {
+        const filters = [
+          'none',
+          'grayscale(50%)',
+          'sepia(100%)',
+          'saturate(150%) hue-rotate(10deg)',
+          'saturate(200%)',
+          'brightness(150%)',
+        ];
+        
+        filters.forEach((filter, i) => {
+          const canvas = previewCanvasRefs.current[i];
+          if (canvas && video.readyState === video.HAVE_ENOUGH_DATA) {
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              // Clear canvas
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+              
+              // Apply flipping if needed
+              if (isFlipped) {
+                ctx.translate(canvas.width, 0);
+                ctx.scale(-1, 1);
+              }
+              
+              // Draw video frame
+              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+              
+              // Reset transformation
+              ctx.setTransform(1, 0, 0, 1, 0, 0);
+              
+              // Apply filter
+              if (filter !== 'none') {
+                ctx.filter = filter;
+                ctx.drawImage(canvas, 0, 0);
+                ctx.filter = 'none';
+              }
+            }
+          }
+        });
+        
+        requestAnimationFrame(updateCanvases);
+      };
+      
+      video.addEventListener('play', updateCanvases);
+      
+      return () => {
+        video.removeEventListener('play', updateCanvases);
+      };
+    }
+  }, [isFlipped]);
+
+  // Modified takePhoto function to apply the current preview filter to the photo
+  const takePhoto = () => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    
+    if (!video || !canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    // Set canvas dimensions to match video
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    
+    // Create two canvases for the two-step process
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = canvas.width;
+    tempCanvas.height = canvas.height;
+    const tempCtx = tempCanvas.getContext('2d');
+    
+    if (!tempCtx) return;
+    
+    // Step 1: Draw video to temp canvas with flipping if needed
+    if (isFlipped) {
+      tempCtx.translate(tempCanvas.width, 0);
+      tempCtx.scale(-1, 1);
+    }
+    tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+    tempCtx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform
+    
+    // Step 2: Draw from temp canvas to main canvas with filter
+    ctx.filter = previewFilter !== 'none' ? previewFilter : 'none';
+    ctx.drawImage(tempCanvas, 0, 0);
+    
+    // Get the final filtered image
+    const imageData = canvas.toDataURL('image/png');
+    setPhoto(imageData);
+    // Set the photo filter to match the current preview filter when taking the photo
+    setPhotoFilter(previewFilter);
+  };
+
+  const flipCamera = () => {
+    setIsFlipped((prev) => !prev);
+  };
+
+  const startRecording = () => {
+    if (videoRef.current?.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      
+      // Set up canvas for filtered recording
+      const canvas = document.createElement('canvas');
+      const video = videoRef.current;
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      const ctx = canvas.getContext('2d');
+      
+      // Create a stream from the canvas
+      const filteredStream = canvas.captureStream(30); // 30 fps
+      
+      // Add audio track if available
+      const audioTracks = stream.getAudioTracks();
+      audioTracks.forEach(track => filteredStream.addTrack(track));
+      
+      // Function to draw video frames with filter
+      const drawFrame = () => {
+        if (ctx && video.readyState === video.HAVE_ENOUGH_DATA) {
+          // Apply flipping if needed
+          if (isFlipped) {
+            ctx.translate(canvas.width, 0);
+            ctx.scale(-1, 1);
+          }
+          
+          // Draw video frame
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          
+          // Reset transformation
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          
+          // Apply filter
+          if (previewFilter !== 'none') {
+            ctx.filter = previewFilter;
+            ctx.drawImage(canvas, 0, 0);
+            ctx.filter = 'none';
+          }
+          
+          // Continue drawing frames if still recording
+          if (mediaRecorderRef.current?.state === 'recording') {
+            requestAnimationFrame(drawFrame);
+          }
+        }
+      };
+      
+      // Set up media recorder with more compatible MIME type options
+      let mimeType = 'video/mp4';
+      
+      // Check for supported MIME types in order of preference
+      if (MediaRecorder.isTypeSupported('video/mp4')) {
+        mimeType = 'video/mp4';
+      } else if (MediaRecorder.isTypeSupported('video/webm; codecs=h264')) {
+        mimeType = 'video/webm; codecs=h264';
+      } else if (MediaRecorder.isTypeSupported('video/webm')) {
+        mimeType = 'video/webm';
+      }
+      
+      const mediaRecorder = new MediaRecorder(filteredStream, { mimeType });
+      mediaRecorderRef.current = mediaRecorder;
+      recordedChunksRef.current = [];
+      
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          recordedChunksRef.current.push(event.data);
+        }
+      };
+      
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(recordedChunksRef.current, { type: mimeType });
+        const videoURL = URL.createObjectURL(blob);
+        setRecordedVideo(videoURL);
+      };
+      
+      // Start recording
+      mediaRecorder.start();
+      drawFrame(); // Start the drawing loop
+      setIsRecording(true);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  // Function to render filter name
+  const getFilterName = (filter: string) => {
+    if (filter === 'none') return 'Normal';
+    if (filter.includes('grayscale')) return 'Gray';
+    if (filter.includes('sepia')) return 'Sepia';
+    if (filter.includes('hue-rotate')) return 'Warm';
+    if (filter.includes('saturate(200%)')) return 'Vivid';
+    if (filter.includes('brightness')) return 'Bright';
+    return 'Filter';
+  };
+
+  // Function to apply filter to captured photo
+  const applyFilterToPhoto = (filter: string) => {
+    if (!photo) return;
+    setPhotoFilter(filter);
+  };
+
+  // Function to download the photo with current filter
+  const downloadPhoto = () => {
+    if (!photo) return;
+    
+    // Create a temporary canvas to apply the current filter
+    const tempCanvas = document.createElement('canvas');
+    const img = new Image();
+    
+    img.onload = () => {
+      tempCanvas.width = img.width;
+      tempCanvas.height = img.height;
+      const ctx = tempCanvas.getContext('2d');
+      
+      if (ctx) {
+        // Draw image
+        ctx.drawImage(img, 0, 0);
+        
+        // Apply current filter if any
+        if (photoFilter !== 'none') {
+          ctx.filter = photoFilter;
+          ctx.drawImage(tempCanvas, 0, 0);
+          ctx.filter = 'none';
+        }
+        
+        // Create download link
+        const filteredImageData = tempCanvas.toDataURL('image/png');
+        const downloadLink = document.createElement('a');
+        downloadLink.href = filteredImageData;
+        downloadLink.download = 'honey-snap-photo.png';
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+      }
+    };
+    
+    img.src = photo;
+  };
+  
+  // Get file extension based on MIME type
+  const getFileExtension = (mimeType: string) => {
+    if (mimeType.includes('mp4')) return 'mp4';
+    if (mimeType.includes('webm')) return 'webm';
+    return 'mp4'; // Default to mp4
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center bg-black text-white p-8 min-h-screen">
+      <h1 className="text-3xl font-bold mb-6">Honey Snap 📸</h1>
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        className={`w-full max-w-md rounded-xl shadow-lg transform ${isFlipped ? 'scale-x-[-1]' : ''}`}
+        style={{ filter: previewFilter === 'none' ? 'none' : previewFilter }}
+      />
+      
+      <div className="mt-4 mb-2">
+        <h3 className="text-lg font-medium">Preview Filter</h3>
+      </div>
+      
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        {[
+          'none',
+          'grayscale(50%)',
+          'sepia(100%)',
+          'saturate(150%) hue-rotate(10deg)',
+          'saturate(200%)',
+          'brightness(150%)',
+        ].map((filter, i) => (
+          <div
+            key={i}
+            onClick={() => setPreviewFilter(filter)}
+            className={`w-24 h-16 rounded shadow cursor-pointer border-2 overflow-hidden relative ${
+              previewFilter === filter ? 'border-pink-500' : 'border-transparent'
+            }`}
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+            <canvas 
+              ref={el => { previewCanvasRefs.current[i] = el; }}
+              width="150"
+              height="100"
+              className="w-full h-full object-cover"
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            <div className="absolute bottom-0 left-0 right-0 bg-black/40 text-xs text-center py-1">
+              {getFilterName(filter)}
+            </div>
+          </div>
+        ))}
+      </div>
+      
+      <div className="flex flex-row gap-4 p-4">
+        <button
+          onClick={takePhoto}
+          className="px-6 py-2 bg-pink-600 rounded hover:bg-pink-500 transition"
+        >
+          Take Photo
+        </button>
+        <button
+          onClick={flipCamera}
+          className="px-6 py-2 bg-blue-600 rounded hover:bg-blue-500 transition"
+        >
+          Flip Camera
+        </button>
+        {isRecording ? (
+          <button
+            onClick={stopRecording}
+            className="px-6 py-2 bg-red-600 rounded hover:bg-red-500 transition animate-pulse"
           >
-            Read our docs
-          </a>
+            Stop Recording
+          </button>
+        ) : (
+          <button
+            onClick={startRecording}
+            className="px-6 py-2 bg-green-600 rounded hover:bg-green-500 transition"
+          >
+            Start Recording
+          </button>
+        )}
+      </div>
+      
+      <canvas ref={canvasRef} className="hidden" />
+      
+      {photo && (
+        <div className="mt-6 w-full max-w-md">
+          <h2 className="text-xl mb-2">Your Photo:</h2>
+          <img
+            src={photo}
+            alt="Captured"
+            className="rounded shadow-lg w-full"
+            style={{ filter: photoFilter === 'none' ? 'none' : photoFilter }}
+          />
+          
+          <div className="mt-4">
+            <h3 className="text-lg font-medium mb-2">Apply Filter to Photo</h3>
+            <div className="grid grid-cols-3 gap-4 mb-4">
+              {[
+                'none',
+                'grayscale(50%)',
+                'sepia(100%)',
+                'saturate(150%) hue-rotate(10deg)',
+                'saturate(200%)',
+                'brightness(150%)',
+              ].map((filter, i) => (
+                <div
+                  key={i}
+                  onClick={() => applyFilterToPhoto(filter)}
+                  className={`p-2 rounded shadow cursor-pointer text-center ${
+                    photoFilter === filter ? 'bg-pink-600' : 'bg-gray-700'
+                  }`}
+                >
+                  {getFilterName(filter)}
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          <div className="mt-4 flex justify-center gap-4">
+            <a
+              href={photo}
+              download="honey-snap-photo.png"
+              className="px-4 py-2 bg-purple-600 rounded hover:bg-purple-500 transition"
+            >
+              Download Original
+            </a>
+            <button
+              onClick={downloadPhoto}
+              className="px-4 py-2 bg-indigo-600 rounded hover:bg-indigo-500 transition"
+            >
+              Download with Filter
+            </button>
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
+      )}
+      
+      {recordedVideo && (
+        <div className="mt-6 w-full max-w-md">
+          <h2 className="text-xl mb-2">Your Video:</h2>
+          <video
+            src={recordedVideo}
+            controls
+            className="rounded shadow-lg w-full"
           />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+          <div className="mt-2 flex justify-center">
+            <a
+              href={recordedVideo}
+              download={`honey-snap-video.${mediaRecorderRef.current ? getFileExtension(mediaRecorderRef.current.mimeType) : 'mp4'}`}
+              className="px-4 py-1 bg-purple-600 rounded hover:bg-purple-500 transition"
+            >
+              Download Video
+            </a>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
