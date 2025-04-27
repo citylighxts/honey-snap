@@ -7,13 +7,14 @@ export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [photo, setPhoto] = useState<string | null>(null);
   const [isFlipped, setIsFlipped] = useState(true);
-  const [previewFilter, setPreviewFilter] = useState('none'); // Filter for live preview
-  const [photoFilter, setPhotoFilter] = useState('none'); // Filter for captured photo
+  const [previewFilter, setPreviewFilter] = useState('none');
+  const [photoFilter, setPhotoFilter] = useState('none');
   const [isRecording, setIsRecording] = useState(false);
   const [recordedVideo, setRecordedVideo] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const previewCanvasRefs = useRef<(HTMLCanvasElement | null)[]>([null, null, null, null, null, null]);
+  const [isFlashActive, setIsFlashActive] = useState(false);
 
   const getVideo = async () => {
     try {
@@ -45,16 +46,17 @@ export default function Home() {
     // Set up preview canvases
     const updatePreviewCanvases = () => {
       if (!videoRef.current || !videoRef.current.videoWidth) return;
-      
+    
       const filters = [
         'none',
         'grayscale(50%)',
+        'grayscale(100%)',
         'sepia(100%)',
         'saturate(150%) hue-rotate(10deg)',
         'saturate(200%)',
-        'brightness(150%)',
+        'blur(0.7px) brightness(130%) contrast(85%) saturate(120%) opacity(95%)',
       ];
-      
+    
       filters.forEach((filter, i) => {
         const canvas = previewCanvasRefs.current[i];
         if (canvas && videoRef.current) {
@@ -62,29 +64,27 @@ export default function Home() {
           if (ctx) {
             canvas.width = 150;
             canvas.height = 100;
-            
+    
             // Apply flipping if needed
             if (isFlipped) {
               ctx.translate(canvas.width, 0);
               ctx.scale(-1, 1);
             }
-            
+    
+            // Debug: Log the filter being applied
+            console.log(`Applying filter: ${filter}`);
+            ctx.filter = filter !== 'none' ? filter : 'none';
+    
             // Draw video frame
             ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-            
-            // Reset transformation
+    
+            // Reset transformation and filter
             ctx.setTransform(1, 0, 0, 1, 0, 0);
-            
-            // Apply filter to the drawn image
-            if (filter !== 'none') {
-              ctx.filter = filter;
-              ctx.drawImage(canvas, 0, 0);
-              ctx.filter = 'none';
-            }
+            ctx.filter = 'none';
           }
         }
       });
-      
+    
       if (videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
         requestAnimationFrame(updatePreviewCanvases);
       }
@@ -112,10 +112,11 @@ export default function Home() {
         const filters = [
           'none',
           'grayscale(50%)',
+          'grayscale(100%)',
           'sepia(100%)',
           'saturate(150%) hue-rotate(10deg)',
           'saturate(200%)',
-          'brightness(150%)',
+          'blur(0.7px) brightness(130%) contrast(85%) saturate(120%) opacity(95%)',
         ];
         
         filters.forEach((filter, i) => {
@@ -163,41 +164,67 @@ export default function Home() {
   const takePhoto = () => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    
+
     if (!video || !canvas) return;
-    
+
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    
-    // Set canvas dimensions to match video
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    
-    // Create two canvases for the two-step process
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = canvas.width;
-    tempCanvas.height = canvas.height;
-    const tempCtx = tempCanvas.getContext('2d');
-    
-    if (!tempCtx) return;
-    
-    // Step 1: Draw video to temp canvas with flipping if needed
-    if (isFlipped) {
-      tempCtx.translate(tempCanvas.width, 0);
-      tempCtx.scale(-1, 1);
-    }
-    tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
-    tempCtx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform
-    
-    // Step 2: Draw from temp canvas to main canvas with filter
-    ctx.filter = previewFilter !== 'none' ? previewFilter : 'none';
-    ctx.drawImage(tempCanvas, 0, 0);
-    
-    // Get the final filtered image
-    const imageData = canvas.toDataURL('image/png');
-    setPhoto(imageData);
-    // Set the photo filter to match the current preview filter when taking the photo
-    setPhotoFilter(previewFilter);
+
+    let countdown = 3; // Start countdown from 3
+    const countdownElement = document.createElement('div');
+    countdownElement.style.position = 'absolute';
+    countdownElement.style.top = '50%';
+    countdownElement.style.left = '50%';
+    countdownElement.style.transform = 'translate(-50%, -50%)';
+    countdownElement.style.fontSize = '8rem';
+    countdownElement.style.fontWeight = 'bold';
+    countdownElement.style.color = 'white';
+    countdownElement.style.zIndex = '1000';
+    countdownElement.style.textShadow = '0 0 4px black';
+    document.body.appendChild(countdownElement);
+
+    const countdownInterval = setInterval(() => {
+      countdownElement.textContent = countdown.toString();
+      if (countdown === 0) {
+        clearInterval(countdownInterval);
+        document.body.removeChild(countdownElement);
+
+        // Trigger flash effect
+        setIsFlashActive(true);
+        setTimeout(() => setIsFlashActive(false), 200); // Flash duration
+
+        // Set canvas dimensions to match video
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+
+        // Create two canvases for the two-step process
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        const tempCtx = tempCanvas.getContext('2d');
+
+        if (!tempCtx) return;
+
+        // Step 1: Draw video to temp canvas with flipping if needed
+        if (isFlipped) {
+          tempCtx.translate(tempCanvas.width, 0);
+          tempCtx.scale(-1, 1);
+        }
+        tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+        tempCtx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform
+
+        // Step 2: Draw from temp canvas to main canvas with filter
+        ctx.filter = previewFilter !== 'none' ? previewFilter : 'none';
+        ctx.drawImage(tempCanvas, 0, 0);
+
+        // Get the final filtered image
+        const imageData = canvas.toDataURL('image/png');
+        setPhoto(imageData);
+        // Set the photo filter to match the current preview filter when taking the photo
+        setPhotoFilter(previewFilter);
+      }
+      countdown -= 1;
+    }, 1000); // Countdown interval of 1 second
   };
 
   const flipCamera = () => {
@@ -296,7 +323,8 @@ export default function Home() {
   // Function to render filter name
   const getFilterName = (filter: string) => {
     if (filter === 'none') return 'Normal';
-    if (filter.includes('grayscale')) return 'Gray';
+    if (filter.includes('grayscale(50%)')) return 'Gray';
+    if (filter.includes('grayscale(100%)')) return 'Black & White';
     if (filter.includes('sepia')) return 'Sepia';
     if (filter.includes('hue-rotate')) return 'Warm';
     if (filter.includes('saturate(200%)')) return 'Vivid';
@@ -356,77 +384,84 @@ export default function Home() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center bg-black text-white p-4 sm:p-8 min-h-screen">
+    <div className="flex flex-col items-center justify-center bg-black text-white p-4 sm:p-8 min-h-screen overflow-hidden">
       <h1 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-6 text-center">Honey Snap 📸</h1>
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        className={`w-full max-w-sm sm:max-w-md rounded-xl shadow-lg transform ${isFlipped ? 'scale-x-[-1]' : ''}`}
-        style={{ filter: previewFilter === 'none' ? 'none' : previewFilter }}
-      />
-  
-      <div className="mt-4 mb-2 text-center">
-        <h3 className="text-lg font-medium">Preview Filter</h3>
-      </div>
-  
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
-        {[
-          'none',
-          'grayscale(50%)',
-          'sepia(100%)',
-          'saturate(150%) hue-rotate(10deg)',
-          'saturate(200%)',
-          'brightness(150%)',
-        ].map((filter, i) => (
-          <div
-            key={i}
-            onClick={() => setPreviewFilter(filter)}
-            className={`w-20 h-14 sm:w-24 sm:h-16 rounded shadow cursor-pointer border-2 overflow-hidden relative ${
-              previewFilter === filter ? 'border-pink-500' : 'border-transparent'
-            }`}
-          >
-            <canvas 
-              ref={el => { previewCanvasRefs.current[i] = el; }}
-              width="150"
-              height="100"
-              className="w-full h-full object-cover"
-            />
-            <div className="absolute bottom-0 left-0 right-0 bg-black/40 text-xs text-center py-1">
-              {getFilterName(filter)}
-            </div>
-          </div>
-        ))}
-      </div>
-  
-      <div className="flex flex-wrap justify-center gap-4 p-4">
+      <div className="relative w-5/8">
+      {isFlashActive && (
+        <div className="absolute inset-0 bg-white z-50 pointer-events-none"></div>
+      )}
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          className={`w-full rounded-xl shadow-lg transform ${isFlipped ? 'scale-x-[-1]' : ''}`}
+          style={{ filter: previewFilter === 'none' ? 'none' : previewFilter }}
+        />
+        <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 flex flex-col items-center justify-center">
+          <div className="flex flex-wrap gap-4 p-4 font-bold">
         <button
           onClick={takePhoto}
-          className="px-4 sm:px-6 py-2 bg-pink-600 rounded hover:bg-pink-500 transition"
+          className="px-4 sm:px-6 py-2 bg-pink-600 rounded-lg hover:bg-pink-500 transition"
         >
           Take Photo
         </button>
         <button
           onClick={flipCamera}
-          className="px-4 sm:px-6 py-2 bg-blue-600 rounded hover:bg-blue-500 transition"
+          className="px-4 sm:px-6 py-2 bg-blue-600 rounded-lg hover:bg-blue-500 transition"
         >
           Flip Camera
         </button>
         {isRecording ? (
           <button
             onClick={stopRecording}
-            className="px-4 sm:px-6 py-2 bg-red-600 rounded hover:bg-red-500 transition animate-pulse"
+            className="px-4 sm:px-6 py-2 bg-red-600 rounded-lg hover:bg-red-500 transition animate-pulse"
           >
             Stop Recording
           </button>
         ) : (
           <button
             onClick={startRecording}
-            className="px-4 sm:px-6 py-2 bg-green-600 rounded hover:bg-green-500 transition"
+            className="px-4 sm:px-6 py-2 bg-green-600 rounded-lg hover:bg-green-500 transition"
           >
             Start Recording
           </button>
         )}
+          </div>
+        </div>
+      </div>
+  
+      <div className="mt-4 mb-2 text-center">
+        <h3 className="text-lg font-medium">Preview Filter</h3>
+      </div>
+  
+      <div className="w-full flex gap-4 mb-6 overflow-x-auto">
+        {[
+          'none',
+          'grayscale(50%)',
+          'grayscale(100%)',
+          'sepia(100%)',
+          'saturate(150%) hue-rotate(10deg)',
+          'saturate(200%)',
+          'blur(0.7px) brightness(130%) contrast(85%) saturate(120%) opacity(95%)',
+        ].map((filter, i) => (
+          <div
+        key={i}
+        onClick={() => setPreviewFilter(filter)}
+        className={`w-20 h-14 sm:w-24 sm:h-16 rounded shadow cursor-pointer border-2 overflow-hidden relative flex-shrink-0 ${
+          previewFilter === filter ? 'border-pink-500' : 'border-transparent'
+        }`}
+          >
+        <canvas 
+          ref={el => { previewCanvasRefs.current[i] = el; }}
+          width="150"
+          height="100"
+          className="w-full h-full object-cover"
+        />
+        <div className="absolute bottom-0 left-0 right-0 bg-black/40 text-xs text-center py-1">
+          {getFilterName(filter)}
+        </div>
+          </div>
+        ))}
       </div>
   
       <canvas ref={canvasRef} className="hidden" />
@@ -447,10 +482,11 @@ export default function Home() {
               {[
                 'none',
                 'grayscale(50%)',
+                'grayscale(100%)',
                 'sepia(100%)',
                 'saturate(150%) hue-rotate(10deg)',
                 'saturate(200%)',
-                'brightness(150%)',
+                'blur(0.7px) brightness(130%) contrast(85%) saturate(120%) opacity(95%)',
               ].map((filter, i) => (
                 <div
                   key={i}
