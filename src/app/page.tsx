@@ -431,7 +431,7 @@ export default function Home() {
       </div>
   
       <div className="mt-4 mb-2 text-center">
-        <h3 className="text-lg font-medium">Preview Filter</h3>
+        <h3 className="text-lg font-bold">Preview Filter</h3>
       </div>
   
       <div className="w-full flex gap-4 mb-6 overflow-x-auto">
